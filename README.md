@@ -1,10 +1,10 @@
 # Debian-titus
-Debian customizations from Chris Titus Tech
+Debian customizations from KartikAkolia
  
 ### To install:
 
-```
-git clone https://github.com/ChrisTitusTech/debian-titus
+```bash
+git clone https://github.com/KartikAkolia/Debian-titus
 cd debian-titus
 sudo ./install.sh
 ```
