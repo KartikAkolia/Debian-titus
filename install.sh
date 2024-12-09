@@ -82,5 +82,12 @@ systemctl set-default graphical.target
 # Enable wireplumber audio service
 sudo -u $username systemctl --user enable wireplumber.service
 
+# DWM Setup
+git clone https://github.com/ChrisTitusTech/dwm-titus
+cd dwm-titus
+make clean install
+cp dwm.desktop /usr/share/xsessions
+cd $builddir
+
 # Use nala
 bash scripts/usenala
