@@ -9,30 +9,29 @@ fi
 username=$(id -u -n 1000)
 builddir=$(pwd)
 
-
-# Install Terminus Fonts
-sudo apt install fonts-terminus
-
-# Set the font to Terminus Fonts
-setfont /usr/share/consolefonts/Uni3-TerminusBold28x14.psf.gz
-
-# Clear the screen
-clear
-
-
 # Let user choose the option of the browser installation
-
-echo "Please select the web browser : "
-
-browser_option=("Floorp" "Thorium")
-select web in "${browser_option[@]}"; do
-  if [ "$web" = "Floorp" ]; then
-    web_install="Floorp"
-    break
-  elif [ "$web" = "Thorium" ]; then
-    web_install="Thorium"
-    break
-  fi
+echo "Please select the web browser to install:"
+PS3="Enter the number of your choice: "
+options=("Firefox" "Google Chrome")
+select choice in "${options[@]}"; do
+  case $choice in
+    "Firefox")
+      echo "[ACTION] Installing Mozilla Firefox..."
+      apt update && apt install -y firefox || { echo "[ERROR] Failed to install Mozilla Firefox"; exit 1; }
+      break
+      ;;
+    "Google Chrome")
+      echo "[ACTION] Installing Google Chrome..."
+      apt update && apt install -y apt-transport-https curl
+      wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg || { echo "[ERROR] Failed to download Google Chrome key"; exit 1; }
+      echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list
+      apt update && apt install -y google-chrome-stable || { echo "[ERROR] Failed to install Google Chrome"; exit 1; }
+      break
+      ;;
+    *)
+      echo "Invalid selection. Try again."
+      ;;
+  esac
 done
 
 # Update packages list and update system
@@ -42,11 +41,10 @@ apt upgrade -y
 # Install nala
 apt install nala -y
 
-# Making .config and Moving config files and background to Pictures
+# Creating directories and moving config files
 cd $builddir
 mkdir -p /home/$username/.config
 mkdir -p /home/$username/.fonts
-mkdir -p /home/$username/Pictures
 mkdir -p /home/$username/Pictures/backgrounds
 cp -R dotconfig/* /home/$username/.config/
 cp bg.jpg /home/$username/Pictures/backgrounds/
@@ -54,9 +52,10 @@ mv user-dirs.dirs /home/$username/.config
 chown -R $username:$username /home/$username
 
 # Installing Essential Programs 
-nala install feh kitty rofi picom thunar nitrogen lxpolkit x11-xserver-utils unzip wget pipewire wireplumber pavucontrol build-essential libx11-dev libxft-dev libxinerama-dev libx11-xcb-dev libxcb-res0-dev zoxide xdg-utils -y
-# Installing Other less important Programs
-nala install neofetch flameshot psmisc mangohud vim lxappearance papirus-icon-theme lxappearance fonts-noto-color-emoji lightdm -y
+nala install feh alacritty rofi picom thunar nitrogen lxpolkit x11-xserver-utils unzip wget pipewire wireplumber pavucontrol build-essential libx11-dev libxft-dev libxinerama-dev libx11-xcb-dev libxcb-res0-dev zoxide xdg-utils -y
+
+# Installing Other Programs
+nala install flameshot psmisc vim lxappearance papirus-icon-theme lxappearance fonts-noto-color-emoji lightdm -y
 
 # Download Nordic Theme
 cd /usr/share/themes/
@@ -65,68 +64,23 @@ git clone https://github.com/EliverLara/Nordic.git
 # Installing fonts
 cd $builddir 
 nala install fonts-font-awesome -y
-wget https://github.com/ryanoasis/nerd-fonts/releases/download/v2.1.0/FiraCode.zip
+wget https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/FiraCode.zip
 unzip FiraCode.zip -d /home/$username/.fonts
-wget https://github.com/ryanoasis/nerd-fonts/releases/download/v2.1.0/Meslo.zip
+wget https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/Meslo.zip
 unzip Meslo.zip -d /home/$username/.fonts
 mv dotfonts/fontawesome/otfs/*.otf /home/$username/.fonts/
 chown $username:$username /home/$username/.fonts/*
 
-# Reloading Font
+# Reloading Font Cache
 fc-cache -vf
-# Removing zip Files
 rm ./FiraCode.zip ./Meslo.zip
 
-# Install Nordzy cursor
-git clone https://github.com/alvatip/Nordzy-cursors
-cd Nordzy-cursors
-./install.sh
-cd $builddir
-rm -rf Nordzy-cursors
-
-# Install the Web Browser
-if [[ $web = Floorp ]]; then
-  # Install floorp-browser
-  nala install apt-transport-https curl -y
-  curl -fsSL https://ppa.ablaze.one/KEY.gpg | gpg --dearmor -o /usr/share/keyrings/Floorp.gpg
-  curl -sS --compressed -o /etc/apt/sources.list.d/Floorp.list 'https://ppa.ablaze.one/Floorp.list'
-  nala update  
-  nala install floorp -y
-
-# If the option is Thorium
-
-elif [[ $web = Thorium ]]; then
-  cd $builddir
-  
-  # Grab From the latest release of the amd64
-  
-  nala install apt-transport-https curl -y
-  
-  wget -O ./deb-packages/thorium-browser.deb "$(curl -s https://api.github.com/repos/Alex313031/Thorium/releases/latest | grep browser_download_url | grep amd64.deb | cut -d '"' -f 4)"
-  
-  nala install ./deb-packages/thorium-browser.deb -y
-
-fi
 # Enable graphical login and change target from CLI to GUI
 systemctl enable lightdm
 systemctl set-default graphical.target
 
 # Enable wireplumber audio service
-
 sudo -u $username systemctl --user enable wireplumber.service
-
-# Beautiful bash
-git clone https://github.com/ChrisTitusTech/mybash
-cd mybash
-bash setup.sh
-cd $builddir
-
-# DWM Setup
-git clone https://github.com/ChrisTitusTech/dwm-titus
-cd dwm-titus
-make clean install
-cp dwm.desktop /usr/share/xsessions
-cd $builddir
 
 # Use nala
 bash scripts/usenala

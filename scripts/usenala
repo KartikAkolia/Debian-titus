@@ -1,12 +1,21 @@
 #!/bin/bash
+
+# Get the username of the first user (UID 1000)
 username=$(id -u -n 1000)
-# Configure bash to use nala wrapper instead of apt
-usenala="/home/$username/.use-nala"
-rusenala="/root/.use-nala"
-ubashrc="/home/$username/.bashrc"
-rbashrc="/root/.bashrc"
-if [ ! -f "$usenala" ]; then
-cat << \EOF > "$usenala"
+
+# Paths for configuring the Nala wrapper
+user_nala_config="/home/$username/.use-nala"
+root_nala_config="/root/.use-nala"
+user_bashrc="/home/$username/.bashrc"
+root_bashrc="/root/.bashrc"
+
+# Function to create the Nala wrapper
+create_nala_wrapper() {
+  local target_config="$1"
+  local bashrc_file="$2"
+
+  if [ ! -f "$target_config" ]; then
+    cat << 'EOF' > "$target_config"
 apt() {
   command nala "$@"
 }
@@ -19,22 +28,19 @@ sudo() {
   fi
 }
 EOF
-cat << EOF >> "$ubashrc"
-if [ -f "$usenala" ]; then
-        . "$usenala"
-fi
-EOF
-fi
+    echo "if [ -f \"$target_config\" ]; then . \"$target_config\"; fi" >> "$bashrc_file"
+  fi
+}
 
-if [ ! -f "$rusenala" ]; then
-cat << \EOF > "$rusenala"
+# Create Nala wrapper for the user
+create_nala_wrapper "$user_nala_config" "$user_bashrc"
+
+# Create a simplified Nala wrapper for the root user
+if [ ! -f "$root_nala_config" ]; then
+  cat << 'EOF' > "$root_nala_config"
 apt() {
   command nala "$@"
 }
 EOF
-cat << EOF >> "$rbashrc"
-if [ -f "$rusenala" ]; then
-        . "$rusenala"
-fi
-EOF
+  echo "if [ -f \"$root_nala_config\" ]; then . \"$root_nala_config\"; fi" >> "$root_bashrc"
 fi
