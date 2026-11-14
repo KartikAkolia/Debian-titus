@@ -1,12 +1,59 @@
-#!/bin/bash
-username=$(id -u -n 1000)
-# Configure bash to use nala wrapper instead of apt
-usenala="/home/$username/.use-nala"
-rusenala="/root/.use-nala"
-ubashrc="/home/$username/.bashrc"
-rbashrc="/root/.bashrc"
-if [ ! -f "$usenala" ]; then
-cat << \EOF > "$usenala"
+#!/usr/bin/env bash
+#
+# Make interactive bash shells (the target user's and root's) run nala when
+# you type apt. install.sh runs this as root; to run it by hand:
+#   sudo scripts/usenala <username> [backup-suffix]
+# `usenala --print-hook <wrapper>` prints the bashrc lines that source a
+# wrapper, so install.sh can bake the same text into mybash's .bashrc.
+
+set -Eeuo pipefail
+
+die() {
+  printf 'usenala: %s\n' "$*" >&2
+  exit 1
+}
+
+# The lines added to a bashrc to source the wrapper.
+hook_block() {
+  printf '\nif [ -f "%s" ]; then\n  . "%s"\nfi\n' "$1" "$1"
+}
+
+# Append hook_block to bashrc unless a line sourcing the wrapper is there.
+# A dangling bashrc symlink (e.g. into a deleted mybash checkout) is moved
+# aside and replaced with Debian's default bashrc first.
+add_hook() {
+  local bashrc=$1 wrapper=$2
+  if [[ -L $bashrc && ! -e $bashrc ]]; then
+    mv -- "$bashrc" "$bashrc.bak.$stamp"
+    cp -- /etc/skel/.bashrc "$bashrc"
+  fi
+  if [[ -f $bashrc ]] && grep -qF ". \"$wrapper\"" "$bashrc"; then
+    return 0
+  fi
+  hook_block "$wrapper" >>"$bashrc"
+}
+
+if [[ ${1:-} == --print-hook ]]; then
+  [[ $# -eq 2 ]] || die "usage: usenala --print-hook <wrapper>"
+  hook_block "$2"
+  exit 0
+fi
+
+[[ $EUID -eq 0 ]] || die "run as root"
+username=${1:-${SUDO_USER:-}}
+# Suffix for backups; install.sh passes its own so one run's backups match.
+stamp=${2:-$(date +%Y%m%d%H%M%S)}
+[[ $stamp =~ ^[A-Za-z0-9._-]+$ ]] || die "invalid backup suffix: $stamp"
+[[ -n $username && $username != root ]] || die "usage: usenala <username>"
+passwd_entry=$(getent passwd "$username") || die "no such user: $username"
+# Normalised the same way install.sh does, so the hook path matches exactly.
+userhome=$(realpath -m -s -- "$(cut -d: -f6 <<<"$passwd_entry")")
+
+# The user's files are written as the user, and an existing wrapper is left
+# alone. install.sh already puts the hook into mybash's .bashrc (which
+# ~/.bashrc links to), so add_hook only appends when it isn't there.
+if ! runuser -u "$username" -- test -e "$userhome/.use-nala"; then
+  runuser -u "$username" -- tee "$userhome/.use-nala" >/dev/null <<'EOF'
 apt() {
   command nala "$@"
 }
@@ -19,22 +66,46 @@ sudo() {
   fi
 }
 EOF
-cat << EOF >> "$ubashrc"
-if [ -f "$usenala" ]; then
-        . "$usenala"
 fi
-EOF
-fi
+# shellcheck disable=SC2016 # $1-$3 are the inner shell's arguments
+runuser -u "$username" -- bash -c "$(declare -f hook_block add_hook)"'; stamp=$3; add_hook "$1" "$2"' \
+  _ "$userhome/.bashrc" "$userhome/.use-nala" "$stamp"
 
-if [ ! -f "$rusenala" ]; then
-cat << \EOF > "$rusenala"
+# Root's own dotfiles: older Debian-titus versions ran mybash as root, which
+# could leave these, or the directories holding them, as symlinks into a
+# user's checkout (files the user controls, which root's shell would run) or
+# dangling. A symlink is kept only if it is a single hop to an existing file
+# or directory under /root with no symlinks on the way (mybash's own layout);
+# anything else is moved aside. Directories come first, so the files are
+# checked where they really are; .bashrc gets Debian's default back.
+safe_root_link() {
+  local link=$1 hop resolved
+  hop=$(readlink -- "$link")
+  if [[ $hop != /* ]]; then
+    # Relative to where the link really is (its parent may be a kept link).
+    hop=$(readlink -f -- "$(dirname -- "$link")")/$hop
+  fi
+  hop=$(realpath -m -s -- "$hop")
+  resolved=$(readlink -f -- "$link" || true)
+  [[ $hop == /root/* && $resolved == "$hop" && ! -L $hop && -e $hop ]]
+}
+for f in /root/.config /root/.config/fastfetch /root/.local /root/.local/bin \
+  /root/.bashrc /root/.config/starship.toml /root/.config/fastfetch/config.jsonc \
+  /root/.local/bin/starship-theme; do
+  if [[ -L $f ]] && ! safe_root_link "$f"; then
+    mv -- "$f" "$f.bak.$stamp"
+    printf '  moved aside %s, a symlink to %s\n' "$f" "$(readlink -- "$f.bak.$stamp")"
+    if [[ $f == /root/.bashrc ]]; then
+      cp -- /etc/skel/.bashrc "$f"
+    fi
+  fi
+done
+
+if [[ ! -e /root/.use-nala ]]; then
+  cat >/root/.use-nala <<'EOF'
 apt() {
   command nala "$@"
 }
 EOF
-cat << EOF >> "$rbashrc"
-if [ -f "$rusenala" ]; then
-        . "$rusenala"
 fi
-EOF
-fi
+add_hook /root/.bashrc /root/.use-nala

@@ -84,6 +84,8 @@ case $chosen in
 				bspc quit
 			elif [[ "$DESKTOP_SESSION" == "i3" ]]; then
 				i3-msg exit
+			elif [[ "$DESKTOP_SESSION" == "dwm" ]]; then
+				pkill -USR2 -x -u "$USER" dwm
 			fi
 		elif [[ $ans == "no" || $ans == "NO" || $ans == "n" || $ans == "N" ]]; then
 			exit 0

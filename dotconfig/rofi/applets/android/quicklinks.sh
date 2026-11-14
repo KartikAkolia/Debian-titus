@@ -14,7 +14,9 @@ msg() {
 }
 
 # Browser
-if [[ -f /usr/bin/firefox ]]; then
+if [[ -f /usr/bin/floorp ]]; then
+	app="floorp"
+elif [[ -f /usr/bin/firefox ]]; then
 	app="firefox"
 elif [[ -f /usr/bin/chromium ]]; then
 	app="chromium"
