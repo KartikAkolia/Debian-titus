@@ -66,7 +66,9 @@ case $chosen in
 		fi
         ;;
     $browser)
-		if [[ -f /usr/bin/firefox ]]; then
+		if [[ -f /usr/bin/floorp ]]; then
+			floorp &
+		elif [[ -f /usr/bin/firefox ]]; then
 			firefox &
 		elif [[ -f /usr/bin/chromium ]]; then
 			chromium &

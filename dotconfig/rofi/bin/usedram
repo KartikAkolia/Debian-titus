@@ -5,7 +5,7 @@ mem_info=$(</proc/meminfo)
 		for m in $mem_info; do
 			case ${m//:*} in
 				"MemTotal") usedmem=$((usedmem+=${m//*:})); totalmem=${m//*:} ;;
-				"ShMem") usedmem=$((usedmem+=${m//*:})) ;;
+				"Shmem") usedmem=$((usedmem+=${m//*:})) ;;
 				"MemFree"|"Buffers"|"Cached"|"SReclaimable") usedmem=$((usedmem-=${m//*:})) ;;
 			esac
 		done

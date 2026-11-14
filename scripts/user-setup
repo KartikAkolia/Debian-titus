@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+#
+# Install Debian-titus's per-user files. install.sh runs this as the target
+# user, never as root, after staging verified downloads in a directory:
+#   user-setup <staging-dir> <backup-suffix> <browser.desktop>
+# Files are installed one at a time. An existing file that differs is moved
+# aside to <name>.bak.<backup-suffix> first; files that dwm-titus or the user
+# change at runtime are only installed when missing.
+
+set -Eeuo pipefail
+
+die() {
+  printf 'user-setup: %s\n' "$*" >&2
+  exit 1
+}
+
+[[ $EUID -ne 0 ]] || die "refusing to run as root; install.sh runs this as the target user"
+[[ $# -eq 3 ]] || die "usage: user-setup <staging-dir> <backup-suffix> <browser.desktop>"
+staging=$1
+stamp=$2
+browser_desktop=$3
+
+# dwm-titus's theme-apply.sh edits these at every login and theme change, so
+# replacing them on a re-run would undo the user's theme and churn backups.
+seed_only=(gtk-3.0/settings.ini gtk-4.0/settings.ini kitty/kitty.conf)
+
+# True if dest's directory, or its nearest existing ancestor (which mkdir -p
+# would create it in), is writable; otherwise warn. A root-owned directory or
+# mount point that the user can't write is skipped instead of aborting.
+writable_for() {
+  local dir
+  dir=$(dirname -- "$1")
+  while [[ ! -e $dir && ! -L $dir && $dir != / ]]; do
+    dir=$(dirname -- "$dir")
+  done
+  if [[ -d $dir && -w $dir ]]; then
+    return 0
+  fi
+  printf '  skipped %s: %s is not a directory %s can write to\n' "$1" "$dir" "$(id -un)" >&2
+  return 1
+}
+
+backup() {
+  # A symlink or readable file the user doesn't own (left by an old run as
+  # root) is copied and then removed rather than moved, so the backup belongs
+  # to the user instead of staying root-owned in their home. Anything they
+  # can't read is still moved.
+  if [[ -L $1 || (-f $1 && -r $1) ]] && [[ $(stat -c %u -- "$1") != "$EUID" ]]; then
+    cp -P --preserve=mode,timestamps -- "$1" "$1.bak.$stamp"
+    rm -f -- "$1"
+  else
+    mv -- "$1" "$1.bak.$stamp"
+  fi
+  printf '  backed up %s to %s\n' "$1" "$1.bak.$stamp"
+}
+
+# Install one file or symlink. mode is "replace" (back up a different
+# existing file, then install) or "seed" (install only if nothing is there).
+# A regular file reached through the user's own symlink (e.g. GNU stow) that
+# already has the right content is left alone.
+install_file() {
+  local src=$1 dest=$2 mode=$3 parent
+  parent=$(dirname -- "$dest")
+  if [[ -e $dest || -L $dest ]]; then
+    # A dangling symlink (e.g. into a deleted old checkout) counts as missing.
+    if [[ $mode == seed && -e $dest ]]; then
+      return 0
+    fi
+    if [[ -L $src ]]; then
+      if [[ -L $dest && $(readlink -- "$src") == "$(readlink -- "$dest")" ]]; then
+        return 0
+      fi
+    elif [[ -f $dest ]] && cmp -s -- "$src" "$dest"; then
+      # Same content: keep it if it's the user's own file or their own link
+      # (e.g. GNU stow). A matching file the user doesn't own, e.g. left by an
+      # old run as root, is replaced so the user can manage it afterwards.
+      if [[ -L $dest || -O $dest ]]; then
+        return 0
+      fi
+    fi
+  fi
+  if ! writable_for "$dest"; then
+    return 0
+  fi
+  if [[ -e $dest || -L $dest ]]; then
+    backup "$dest"
+  fi
+  mkdir -p -- "$parent"
+  cp -P --preserve=mode,timestamps -- "$src" "$dest"
+}
+
+# Point target at source. mode "replace" moves anything else there aside
+# first; "seed" only creates the link when nothing is there (mybash's
+# starship-theme, for one, replaces its link with a file the user chose).
+link() {
+  local source=$1 target=$2 mode=$3
+  if [[ -L $target && $(readlink -- "$target") == "$source" ]]; then
+    return 0
+  fi
+  if [[ -e $target || -L $target ]]; then
+    # A dangling symlink (e.g. into a deleted old checkout) counts as missing.
+    if [[ $mode == seed && -e $target ]]; then
+      return 0
+    fi
+  fi
+  if ! writable_for "$target"; then
+    return 0
+  fi
+  if [[ -e $target || -L $target ]]; then
+    backup "$target"
+  fi
+  mkdir -p -- "$(dirname -- "$target")"
+  ln -s -- "$source" "$target"
+}
+
+# Files an older Debian-titus (before 2026-11-14) installed. Each is moved
+# aside, and made non-executable, only if it is byte-identical to what that
+# version shipped, so anything the user changed is left alone. For the
+# seed-only files this lets the fixed version below take their place.
+retire() {
+  local path=$1 sha256=$2 reason=$3
+  if [[ -f $path && ! -L $path ]] &&
+    printf '%s  %s\n' "$sha256" "$path" | sha256sum -c --quiet - >/dev/null 2>&1 &&
+    writable_for "$path"; then
+    backup "$path"
+    chmod a-x -- "$path.bak.$stamp"
+    printf '    (%s)\n' "$reason"
+  fi
+}
+retire "$HOME/.config/GIMP/2.10/plug-ins/webexport" \
+  6d7f9f1dd29c3229691ed8ee5b0d81c23587e5eb8967aad2d245655d8279b3da \
+  "an unaudited prebuilt binary the old Debian-titus shipped"
+retire "$HOME/.config/kitty/kitty.conf" \
+  0b3c714062031452b46e87f0fafd82a7e78875e8a25ee70f2b2434ddc5898e78 \
+  "the old Debian-titus kitty.conf, with remote control enabled"
+retire "$HOME/.config/mimeapps.list" \
+  ea543df9cf98430fac139489bcfdaf2d5f05ee2b18ebe6d4f77c0a68079b8dc3 \
+  "the old Debian-titus mimeapps.list, which defaulted to Brave and ranger"
+retire "$HOME/.config/gtk-3.0/settings.ini" \
+  96e96bde316eb618dbdb4a6585be2e25a54b612bb3a33055b8fc407af8b5463a \
+  "the old Debian-titus GTK 3 settings, which named a cursor theme that was never installed"
+for launcher in "$HOME"/.config/rofi/bin/launcher_{colorful,misc,ribbon,slate,text}; do
+  if [[ -L $launcher && ! -e $launcher && $(readlink -- "$launcher") == ../launchers/* ]]; then
+    rm -- "$launcher"
+  fi
+done
+
+# Configuration files
+while IFS= read -r -d '' rel; do
+  rel=${rel#./}
+  mode=replace
+  for seed in "${seed_only[@]}"; do
+    if [[ $rel == "$seed" ]]; then
+      mode=seed
+    fi
+  done
+  install_file "$staging/dotconfig/$rel" "$HOME/.config/$rel" "$mode"
+done < <(cd "$staging/dotconfig" && find . \( -type f -o -type l \) -print0)
+install_file "$staging/gtkrc-2.0" "$HOME/.gtkrc-2.0" seed
+# dwm-titus's dwm-default-apps edits mimeapps.list too, so seed it and only
+# set the web browser entries, which is the choice made in this run.
+install_file "$staging/mimeapps.list" "$HOME/.config/mimeapps.list" seed
+xdg-mime default "$browser_desktop" x-scheme-handler/http x-scheme-handler/https \
+  x-scheme-handler/ftp text/html application/xhtml+xml
+# Seed-only: dwm-titus's autostart picks a random image from this directory
+# with feh, so a backup copy left here would join the rotation.
+install_file "$staging/bg.jpg" "$HOME/Pictures/backgrounds/bg.jpg" seed
+xdg-user-dirs-update
+
+# Fonts
+mkdir -p -- "$HOME/.fonts"
+for font in FiraCode Meslo; do
+  unzip -o -q "$staging/$font.zip" -d "$HOME/.fonts"
+done
+jetbrains_dir=$HOME/.local/share/fonts/JetBrainsMonoNerdFont
+mkdir -p -- "$jetbrains_dir"
+tar -xJf "$staging/JetBrainsMono.tar.xz" -C "$jetbrains_dir" \
+  --wildcards '*JetBrainsMonoNerdFont-*.ttf'
+# A cache that can't be written only slows font lookups down; don't abort.
+fc-cache || printf '  fc-cache failed; fonts still work, but load more slowly\n' >&2
+
+# mybash: the install_configs step of its setup.sh, at the pinned commit.
+# install.sh has already installed its packages and Starship, and the font
+# above, which are the parts of setup.sh that need root or a download.
+# These lists must match install_configs at install.sh's mybash_commit.
+mybash_dir=$HOME/.local/share/mybash
+for f in .bashrc starship.toml config.jsonc README.md setup.sh uninstall.sh starship-theme; do
+  install_file "$staging/mybash/$f" "$mybash_dir/$f" replace
+done
+for f in setup.sh uninstall.sh starship-theme; do
+  if [[ -O $mybash_dir/$f ]]; then
+    chmod +x -- "$mybash_dir/$f"
+  fi
+done
+link "$mybash_dir/.bashrc" "$HOME/.bashrc" replace
+link "$mybash_dir/starship-theme" "$HOME/.local/bin/starship-theme" replace
+link "$mybash_dir/starship.toml" "$HOME/.config/starship.toml" seed
+link "$mybash_dir/config.jsonc" "$HOME/.config/fastfetch/config.jsonc" seed
