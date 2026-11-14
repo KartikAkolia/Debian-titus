@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-14 (later): Alacritty as the default terminal
+
+- Alacritty is now installed and made the default terminal. dwm-titus's terminal launcher (`dwm-terminal`) already tries Alacritty before kitty, and dwm-titus seeds and themes its config.
+- The installer sets `x-terminal-emulator` to Alacritty, because both Alacritty and kitty register at priority 20 and kitty was being picked.
+- It also sets Alacritty as the terminal in `mimeapps.list`, on existing installs too, and puts it first in the rofi applets' terminal entry.
+- kitty stays installed with its config.
+
 ## 2026-11-14: Debian 13 (trixie) audit and fix
 
 This branch picks up from upstream `ChrisTitusTech/Debian-titus` at `f5533bc` (2024-04-21), which no longer worked on current Debian. Each item below was confirmed against the Debian archive, the upstream project, or a run in a throwaway trixie VM. The VM-tested results are in `README.md`'s Testing section.

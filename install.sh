@@ -343,8 +343,8 @@ EOF
     libfontconfig-dev
     # Audio: the full PipeWire stack the Debian wiki recommends
     pipewire-audio wireplumber pavucontrol alsa-utils
-    # Essential programs
-    kitty rofi picom thunar feh lxpolkit zoxide
+    # Essential programs (Alacritty is the default terminal; kitty stays installed)
+    alacritty kitty rofi picom thunar feh lxpolkit zoxide
     # dwm-titus runtime helpers (from its scripts/check-deps.sh)
     xclip xdotool dex jq bluez blueman maim
     # Less important programs (fastfetch replaces neofetch, which trixie dropped)
@@ -361,6 +361,10 @@ EOF
   printf 'lightdm shared/default-x-display-manager select lightdm\n' | debconf-set-selections
   apt-get install "${apt_opts[@]}" "${packages[@]}"
   apt-get install "${apt_opts[@]}" -t trixie-backports quickshell
+  # Alacritty and kitty both register x-terminal-emulator at priority 20, so
+  # pick Alacritty explicitly. (dwm-titus's dwm-terminal already tries it
+  # before kitty.)
+  update-alternatives --set x-terminal-emulator /usr/bin/alacritty
 
   log "Downloading fonts and mybash"
   local font

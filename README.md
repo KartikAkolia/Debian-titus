@@ -46,7 +46,7 @@ The installer asks once which browser to install, then runs unattended. Reboot w
 - **Session:** Xorg, LightDM with the GTK greeter, and dwm-titus with its Quickshell bar.
    - dwm-titus is built from a pinned commit in a temporary root-owned directory. Its runtime files end up in `~/.local/share/dwm-titus`.
    - Quickshell comes from `trixie-backports`, which the script enables.
-- **Desktop programs:** kitty, rofi, picom, Thunar, feh, lxpolkit, flameshot, pavucontrol, lxappearance, fastfetch, MangoHud, vim and neovim.
+- **Desktop programs:** Alacritty (the default terminal), kitty, rofi, picom, Thunar, feh, lxpolkit, flameshot, pavucontrol, lxappearance, fastfetch, MangoHud, vim and neovim.
 - **Audio:** PipeWire through the `pipewire-audio` metapackage, which adds the PulseAudio, ALSA and Bluetooth pieces.
 - **Browser, your choice of two:**
    - Floorp, from its official APT repository.

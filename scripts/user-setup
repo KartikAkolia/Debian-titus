@@ -162,6 +162,8 @@ install_file "$staging/gtkrc-2.0" "$HOME/.gtkrc-2.0" seed
 install_file "$staging/mimeapps.list" "$HOME/.config/mimeapps.list" seed
 xdg-mime default "$browser_desktop" x-scheme-handler/http x-scheme-handler/https \
   x-scheme-handler/ftp text/html application/xhtml+xml
+# Alacritty is the default terminal, also on systems set up before it was.
+xdg-mime default Alacritty.desktop application/terminalemulator x-scheme-handler/terminal
 # Seed-only: dwm-titus's autostart picks a random image from this directory
 # with feh, so a backup copy left here would join the rotation.
 install_file "$staging/bg.jpg" "$HOME/Pictures/backgrounds/bg.jpg" seed
